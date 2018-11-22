@@ -292,6 +292,7 @@ router.post('/register', async (req, res) => {
 	}
 })
 
+<<<<<<< HEAD
 router.post('/do', async (req, res)=>{
 	// console.log('req.body', req.body)
 	res.send('noice')
@@ -437,6 +438,8 @@ router.post('/do', async (req, res)=>{
 	}
 })
 
+=======
+>>>>>>> dda7320a08e13b5c3931e636156882f970d2c401
 /**
   Revoke app tokens for a user
   If appId is not provided all the tokens for all the apps are revoked
