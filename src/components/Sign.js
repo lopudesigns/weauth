@@ -40,7 +40,7 @@ export default class Sign extends Component {
 
   async componentWillMount() {
     document.body.style.backgroundColor = '#f0f2f4';
-    const { type, query, base64 } = this.state;
+		const { type, query, base64 } = this.state;
     if (type === 'tx') {
       if (!base64) {
         this.setState({ validationErrors: [{ error: 'error_tx_base64_required' }], step: 'validationErrors' });

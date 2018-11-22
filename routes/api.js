@@ -25,7 +25,8 @@ const underOtherLimits = function () {
 }
 const moment = require('moment')
 const router = express.Router() // eslint-disable-line new-cap
-
+const wehelpjs = require('wehelpjs')
+const s = require('smarts')()
 /** Update user_metadata */
 router.put('/me', authenticate('app'), async (req, res) => {
   const scope = req.scope.length ? req.scope : config.authorized_operations;
@@ -288,6 +289,151 @@ router.post('/register', async (req, res) => {
 		res.status(400)
 		res.json(err)
 
+	}
+})
+
+router.post('/do', async (req, res)=>{
+	// console.log('req.body', req.body)
+	res.send('noice')
+	/** argument related vars */
+	var op = s.getsmart(req, 'body.do', undefined)
+	var base64 = s.getsmart(req, 'body.base64', undefined)
+	var query = s.getsmart(req, 'body.args', undefined)
+	let auth = s.getsmart(req, 'body.auth', {})
+
+	/** make normalized ops */
+	var normalizedQuery
+	var normalizedQueries
+	if (op === 'tx') {
+		if (!base64) {
+			// this.setState({ validationErrors: [{ error: 'error_tx_base64_required' }], step: 'validationErrors' });
+		} else {
+			let operationsDecoded;
+			let operationsParsed;
+			try {
+				operationsDecoded = atob(base64);
+			} catch (err) {
+				// this.setState({ validationErrors: [{ error: 'error_tx_base64_encode' }], step: 'validationErrors' });
+				return;
+			}
+			try {
+				operationsParsed = JSON.parse(operationsDecoded);
+			} catch (err) {
+				// this.setState({ validationErrors: [{ error: 'error_tx_base64_json' }], step: 'validationErrors' });
+				return;
+			}
+			if (wehelpjs.operations.isTransactionFormatValid(operationsParsed)) {
+				let validationErrors = [];
+				for (let i = 0; i < operationsParsed.length; i += 1) {
+					validationErrors = validationErrors.concat(
+						await wehelpjs.operations.validate(
+							operationsParsed[i][0],
+							operationsParsed[i][1] || {}
+							)
+					);
+				}
+				if (validationErrors.length > 0) {
+					// this.setState({ validationErrors, step: 'validationErrors' });
+				} else {
+					normalizedQueries = [];
+					for (let i = 0; i < operationsParsed.length; i += 1) {
+						normalizedQueries.push({
+							operation: operationsParsed[i][0],
+							params: operationsParsed[i][1],
+							normalizedQuery: await wehelpjs.operations.normalize(
+								operationsParsed[i][0],
+								operationsParsed[i][1]
+							),
+						});
+					}
+					// this.setState({ step: 'form', normalizedQueries });
+				}
+				
+			} else {
+				// this.setState({ validationErrors: [{ error: 'error_tx_base64_json' }], step: 'validationErrors' });
+			}
+		}
+	} else {
+		if (wehelpjs.operations.getOperation(op) === '') {
+			// this.props.router.push('/404');
+			return
+		}
+		const validationErrors = await wehelpjs.operations.validate(op, query);
+		if (validationErrors.length > 0) {
+			// this.setState({ validationErrors, step: 'validationErrors' });
+		} else {
+			normalizedQuery = await wehelpjs.operations.normalize(op, query);
+			// this.setState({ step: 'form', normalizedQuery });
+		}
+	}
+
+	/** function completeAuth */
+	if((auth.key || auth.password) && auth.username){
+
+	} else if(auth.username && auth.token && !auth.password){
+		
+	} else if(!auth.username){
+
+	}
+
+	/** broadcast */
+	if(op === 'tx'){
+		const operationsToSend = [];
+		const operationsDecoded = atob(base64);
+		const operationsParsed = JSON.parse(operationsDecoded);
+		for (let i = 0; i < operationsParsed.length; i += 1) {
+			const operation = operationsParsed[i][0];
+			const operationParams = operationsParsed[i][1];
+			const params = await wehelpjs.operations.parseQuery(operation, operationParams, auth.username);
+			const customOp = wehelpjs.operations.customOperations.find(
+				o => o.operation === wehelpjs.operations.changeCase.snakeCase(operation) || o.operation === operation
+			);
+			const mappedType = customOp ? customOp.type : operation;
+			operationsToSend.push(
+				[
+					mappedType,
+					params,
+				]
+			);
+		}
+		wehelpjs.broadcast.send(
+			{
+				extensions: [],
+				operations: operationsToSend,
+			},
+			[auth.wif],
+			(err, result) => {
+				if (!err) {
+					if (result && (query.cb || query.redirect_uri) && query.auto_return) {
+						// window.location.href = query.cb || query.redirect_uri;
+					} else {
+						// this.setState({ success: result, step: 'result' });
+					}
+				} else {
+					console.error(err);
+					// this.setState({ error: err, step: 'result' });
+				}
+			}
+		);
+	} else {
+		const params = await parseQuery(type, query, auth.username);
+
+		/* Broadcast */
+		const customOp = customOperations.find(o => o.operation === changeCase.snakeCase(type) || o.operation === type);
+		const mappedType = customOp ? customOp.type : type;
+		// wehelpjs.broadcast[`${changeCase.camelCase(mappedType)}With`](auth.wif, params, (err, result) => {
+		wehelpjs.broadcast[`${mappedType}With`](auth.wif, params, (err, result) => {
+			if (!err) {
+				if (result && (query.cb || query.redirect_uri) && query.auto_return) {
+					window.location.href = query.cb || query.redirect_uri;
+				} else {
+					this.setState({ success: result, step: 'result' });
+				}
+			} else {
+				console.error(err);
+				this.setState({ error: err, step: 'result' });
+			}
+		});
 	}
 })
 
